@@ -562,13 +562,20 @@ start_services() {
                 err "服务 $s 未运行，错误日志："
                 # 只挑有内容的行：cloudflared 的 Restart=on-failure 会刷大量
                 # "Scheduled restart job" 之类噪声，把真正的原因冲掉。
-                journalctl -u "$s" -n 100 --no-pager 2>/dev/null \
-                    | grep -viE 'scheduled restart|started .*\.service|stopped .*\.service|restart counter|consumed .* of' \
-                    | tail -n 20 || true
+                # 过滤前先抓关键错误（否则会被下面的过滤一起吃掉）
+                local keylog
+                keylog="$(journalctl -u "$s" -n 200 --no-pager 2>/dev/null \
+                    | grep -viE 'scheduled restart|Startup finished|restart counter|consumed .* of' \
+                    | grep -vE 'systemd\[[0-9]+\]: (Started|Stopped|Starting|Stopping)' \
+                    | tail -n 20 || true)"
+                printf '%s\n' "$keylog"
                 # 服务专属提示
-                if [ "$s" = "$CF_SVC_NAME" ] && \
-                   journalctl -u "$s" -n 100 --no-pager 2>/dev/null | grep -qi 'token is not valid'; then
-                    err "  提示：Cloudflare 隧道 Token 无效。请到 Zero Trust → Networks → Tunnels 重新复制 Token。"
+                if [ "$s" = "$CF_SVC_NAME" ] && printf '%s' "$keylog" | grep -qi 'token is not valid'; then
+                    err "  提示：Cloudflare 隧道 Token 无效。"
+                    err "        请到 Zero Trust → Networks → Tunnels 重新复制完整 Token（很长一串，通常以 eyJ 开头）。"
+                fi
+                if [ "$s" = "$CF_SVC_NAME" ] && printf '%s' "$keylog" | grep -qiE 'no such host|dial tcp|connection refused'; then
+                    err "  提示：cloudflared 连不上 Cloudflare。检查 VPS 出网与 DNS。"
                 fi
                 bad=1
             fi
