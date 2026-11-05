@@ -551,9 +551,15 @@ EOF
 start_services() {
     log "启动服务..."
     if [ "$INIT_SYS" = "systemd" ]; then
-        systemctl restart "${SVC_NAME}" 2>/dev/null || systemctl start "${SVC_NAME}"
+        # 清掉上次失败累计的 start limit，否则重启会被拒绝
+        systemctl reset-failed "${SVC_NAME}" "${CF_SVC_NAME}" 2>/dev/null || true
+        # 注意：这两个 restart 必须容错。set -e 下若直接失败，
+        # 脚本会在打印诊断日志之前退出，用户只看到 systemd 的一行英文。
+        systemctl restart "${SVC_NAME}" 2>/dev/null \
+            || systemctl start "${SVC_NAME}" 2>/dev/null || true
         sleep 2
-        systemctl restart "${CF_SVC_NAME}" 2>/dev/null || systemctl start "${CF_SVC_NAME}"
+        systemctl restart "${CF_SVC_NAME}" 2>/dev/null \
+            || systemctl start "${CF_SVC_NAME}" 2>/dev/null || true
         sleep 3
 
         local bad=0 s
@@ -582,9 +588,11 @@ start_services() {
         done
         [ "$bad" -eq 0 ] || die "服务启动失败"
     else
-        rc-service "${SVC_NAME}" restart >/dev/null 2>&1 || rc-service "${SVC_NAME}" start
+        rc-service "${SVC_NAME}" restart >/dev/null 2>&1 \
+            || rc-service "${SVC_NAME}" start >/dev/null 2>&1 || true
         sleep 2
-        rc-service "${CF_SVC_NAME}" restart >/dev/null 2>&1 || rc-service "${CF_SVC_NAME}" start
+        rc-service "${CF_SVC_NAME}" restart >/dev/null 2>&1 \
+            || rc-service "${CF_SVC_NAME}" start >/dev/null 2>&1 || true
         sleep 3
 
         local bad=0 s
