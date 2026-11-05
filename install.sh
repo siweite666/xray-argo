@@ -831,10 +831,9 @@ main() {
         write_openrc
     fi
 
-    start_services
+    # 先生成链接与保存参数：即使服务启动失败，用户也能拿到链接和 xa 排查
     write_links
 
-    # 保存安装参数供 xa 使用（600 权限，token 不落日志）
     umask 077
     cat > "$ENV_FILE" <<EOF
 XRAY_UUID=${UUID}
@@ -851,6 +850,7 @@ EOF
     umask 022
 
     install_xa
+    start_services
     show_links
 
     ok "部署完成。VPS 未开放任何代理端口，全部流量经 Cloudflare Argo 隧道。"
