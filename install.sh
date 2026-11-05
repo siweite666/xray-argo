@@ -306,12 +306,23 @@ gen_uuid() {
 
 gen_token_str() {
     # gen_token_str <长度>：生成 URL 安全的随机串
-    local n="${1:-20}"
-    if [ -r /dev/urandom ]; then
-        LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c "$n"
-    else
-        openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | head -c "$n"
+    #
+    # 注意：不能用 `tr < /dev/urandom | head -c N`。
+    # 在 set -o pipefail 下，head 读够 N 字节就退出，tr 随之收到 SIGPIPE，
+    # 整条管道返回 141，配合 set -e 会让脚本静默中断（踩过）。
+    # 改为先取定长随机字节再过滤，全程不产生 SIGPIPE。
+    local n="${1:-20}" raw out
+    # 多取 4 倍字节，过滤后仍能凑够 n 个
+    raw="$(od -An -tx1 -N "$((n * 4))" /dev/urandom 2>/dev/null | tr -d ' \n')"
+    if [ -z "$raw" ] && command -v openssl >/dev/null 2>&1; then
+        raw="$(openssl rand -hex "$((n * 2))")"
     fi
+    out="$(printf '%s' "$raw" | tr -dc 'A-Za-z0-9' | cut -c "1-${n}")"
+    # 万一过滤后不够长，用时间戳+pid 补齐
+    while [ "${#out}" -lt "$n" ]; do
+        out="${out}$(date +%s%N | tr -dc '0-9')"
+    done
+    printf '%s' "${out:0:n}"
 }
 
 # URL 编码（纯 bash，避免依赖 python / jq）
