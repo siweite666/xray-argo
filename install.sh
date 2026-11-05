@@ -472,6 +472,8 @@ Description=Cloudflare Argo tunnel for Xray
 After=network-online.target ${SVC_NAME}.service
 Wants=network-online.target
 Requires=${SVC_NAME}.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -479,7 +481,7 @@ User=root
 EnvironmentFile=${APP_DIR}/cloudflared.env
 ExecStart=${APP_DIR}/cloudflared tunnel --no-autoupdate run --protocol ${ARG_PROTOCOL}
 Restart=on-failure
-RestartSec=5
+RestartSec=10
 LimitNOFILE=65535
 
 [Install]
@@ -557,8 +559,17 @@ start_services() {
         local bad=0 s
         for s in "${SVC_NAME}" "${CF_SVC_NAME}"; do
             if ! systemctl is-active --quiet "$s"; then
-                err "服务 $s 未运行，最近 20 行日志："
-                journalctl -u "$s" -n 20 --no-pager 2>/dev/null || true
+                err "服务 $s 未运行，错误日志："
+                # 只挑有内容的行：cloudflared 的 Restart=on-failure 会刷大量
+                # "Scheduled restart job" 之类噪声，把真正的原因冲掉。
+                journalctl -u "$s" -n 100 --no-pager 2>/dev/null \
+                    | grep -viE 'scheduled restart|started .*\.service|stopped .*\.service|restart counter|consumed .* of' \
+                    | tail -n 20 || true
+                # 服务专属提示
+                if [ "$s" = "$CF_SVC_NAME" ] && \
+                   journalctl -u "$s" -n 100 --no-pager 2>/dev/null | grep -qi 'token is not valid'; then
+                    err "  提示：Cloudflare 隧道 Token 无效。请到 Zero Trust → Networks → Tunnels 重新复制 Token。"
+                fi
                 bad=1
             fi
         done
