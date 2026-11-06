@@ -93,7 +93,7 @@ curl --http3-only -o /dev/null -w 'HTTP=%{http_code} 协议=%{http_version}\n' h
 以 `root` 身份运行：
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/<user>/<repo>/main/install.sh) \
+bash <(curl -Ls https://raw.githubusercontent.com/siweite666/xray-argo/main/install.sh) \
   token="你的隧道Token" \
   domain="node.example.com" \
   port="8001" \
@@ -104,7 +104,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/<user>/<repo>/main/install.sh)
   cfip=""
 ```
 
-> 不确定自己的用户名和仓库名？就是本仓库地址里 `github.com/` 后面那两段，把上面 `<user>/<repo>` 替换掉即可。
+> 想换成自己的 fork？把 URL 里 `siweite666/xray-argo` 换成你的 `用户名/仓库名` 即可。
 
 ### 参数表
 
@@ -187,7 +187,7 @@ XHTTP 是较新的传输方式，**必须用支持它的客户端版本**：
 ## 卸载
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/<user>/<repo>/main/uninstall.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/siweite666/xray-argo/main/uninstall.sh)
 ```
 
 会停止并删除 `xray-argo`、`cloudflared-argo` 两个服务，删除 `/etc/xray-argo/` 目录和 `xa` 命令。**不动系统其他内容。**
