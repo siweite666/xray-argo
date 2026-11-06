@@ -76,8 +76,10 @@ Xray 只监听 `127.0.0.1`，外网唯一入口是你的 Cloudflare 域名。VPS
 
 以 `root` 身份运行：
 
-```bash <(curl -Ls https://raw.githubusercontent.com/siweite666/xray-argo/main/install.sh) \
+```
+  bash <(curl -Ls https://raw.githubusercontent.com/siweite666/xray-argo/main/install.sh) \
   token="你的Token" domain="你的域名" port="8001" protocol="quic"
+
 ```
 
 > 不确定自己的用户名和仓库名？就是本仓库地址里 `github.com/` 后面那两段，把上面 `<user>/<repo>` 替换掉即可。
