@@ -20,12 +20,15 @@ Xray 只监听 `127.0.0.1`，外网唯一入口是你的 Cloudflare 域名。VPS
 
 | 节点 | 传输 | 什么时候用 |
 | :--- | :--- | :--- |
-| **H3** | QUIC / UDP | **日常首选**。UDP 不被 TCP 拥塞控制和 QoS 影响，晚高峰更稳 |
-| **H2** | TCP | 备用。某些网络封锁 UDP（QUIC 握手失败）时切过来 |
+| **H3** | QUIC / UDP | **日常首选**。没有 TCP 队头阻塞，抗丢包。跨境晚高峰丢包 5-10% 时差距最明显 |
+| **H2** | TCP | 备用。网络封 UDP 时用这个 |
 
 两个节点用的是同一个隧道、同一个端口、同一个 UUID，只是 `alpn` 不同。客户端里都加上，哪个能跑用哪个。
 
-> 建议：H3 放在第一位。如果发现连不上、或者速度突然掉到几百 KB/s，切 H2 试一下 —— 大概率是当前网络在限 UDP。
+具体差异：h2 是 HTTP/2 over TCP，一条流丢包会让后续所有数据排队等重传（队头阻塞）；h3 是 HTTP/3 over QUIC/UDP，每条流独立处理，且支持 0-RTT 重连和连接迁移。代价是 h3 依赖 UDP 443 不被拦。
+
+> 建议：H3 放在第一位。**连不上 / 一直转圈**基本可以断定是 UDP 被运营商或公司网络拦了；**速度突然掉到几百 KB/s** 通常是 UDP 被 QoS 限速。这两种情况都切 H2。
+> 反过来说，H2 在晚高峰抖得厉害时，切 H3 通常有改善。
 
 ---
 
@@ -52,12 +55,25 @@ Xray 只监听 `127.0.0.1`，外网唯一入口是你的 Cloudflare 域名。VPS
 
 保存后，`node.example.com` 就指向了本机的 `127.0.0.1:8001`。
 
-### 3. 打开 HTTP/3
+### 3. 打开 HTTP/3（用 h3 节点必须）
 
-隧道详情页 → **Configuration**（或齿轮图标）→ 找到 **Network**：
+**注意：这个开关不在隧道页面里**，而在域名（zone）的设置里：
 
-- 开启 **HTTP/3**（有些界面写作 `Protocol: QUIC` 或 `HTTP/2 / HTTP/3`）
-- 如果你只想用 h2 节点，可以不开；想用 h3 节点**必须开**
+1. Cloudflare 控制台 → 选中你的**域名**（不是 Zero Trust 面板）
+2. 左侧 **Speed → Settings**（有的界面显示为 Speed → Optimization）
+3. 找到 **Protocol Optimization**
+4. 把 **HTTP/3 (with QUIC)** 打开
+
+> 如果你的域名下已经能找到这个开关并且是 On 状态，说明本来就开着，跳过这步。
+
+**怎么确认真的开了**：在任意 Linux 机器上跑
+
+```bash
+curl --http3-only -o /dev/null -w 'HTTP=%{http_code} 协议=%{http_version}\n' https://你的域名/
+```
+
+输出里 `协议=3` 就是开了。看到 `协议=2` 或直接报错就是没开。
+（`HTTP=404` 或 `502` 是正常的 —— 说明 QUIC 握手成功、请求到达了后端，只是路径不存在。）
 
 ### 4. （可选）为 VMess 备用入站加一条 Hostname
 
@@ -76,10 +92,16 @@ Xray 只监听 `127.0.0.1`，外网唯一入口是你的 Cloudflare 域名。VPS
 
 以 `root` 身份运行：
 
-```
-  bash <(curl -Ls https://raw.githubusercontent.com/siweite666/xray-argo/main/install.sh) \
-  token="你的Token" domain="你的域名" port="8001" protocol="quic"
-
+```bash
+bash <(curl -Ls https://raw.githubusercontent.com/<user>/<repo>/main/install.sh) \
+  token="你的隧道Token" \
+  domain="node.example.com" \
+  port="8001" \
+  protocol="quic" \
+  path="" \
+  uuid="" \
+  vmess="n" \
+  cfip=""
 ```
 
 > 不确定自己的用户名和仓库名？就是本仓库地址里 `github.com/` 后面那两段，把上面 `<user>/<repo>` 替换掉即可。
